@@ -2,10 +2,12 @@ package com.wallace.store;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
 
 @SpringBootApplication
+@EnableScheduling
 public class StoreApplication {
 	private static final String DEFAULT_TIMEZONE = "America/Sao_Paulo";
 

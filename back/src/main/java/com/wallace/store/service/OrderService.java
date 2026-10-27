@@ -13,21 +13,28 @@ import com.wallace.store.model.*;
 import com.wallace.store.repository.OrderRepository;
 import com.wallace.store.repository.ProductRepository;
 import com.wallace.store.repository.VisitorRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt");
 
@@ -42,17 +49,23 @@ public class OrderService {
     private final VisitorRepository visitorRepository;
     private final ProductRepository productRepository;
     private final BigDecimal shippingFee;
+    private final Duration pendingExpiration;
+    private final Duration boletoExpiration;
 
     public OrderService(
             OrderRepository repository,
             VisitorRepository visitorRepository,
             ProductRepository productRepository,
-            @Value("${app.order.shipping-fee}") BigDecimal shippingFee
+            @Value("${app.order.shipping-fee}") BigDecimal shippingFee,
+            @Value("${app.order.pending-expiration}") Duration pendingExpiration,
+            @Value("${app.order.boleto-expiration}") Duration boletoExpiration
     ) {
         this.repository = repository;
         this.visitorRepository = visitorRepository;
         this.productRepository = productRepository;
         this.shippingFee = shippingFee;
+        this.pendingExpiration = pendingExpiration;
+        this.boletoExpiration = boletoExpiration;
     }
 
     @Transactional(readOnly = true)
@@ -90,8 +103,11 @@ public class OrderService {
         Visitor visitor = visitorRepository.findById(visitorId)
                 .orElseThrow(() -> new VisitorNotFoundException(visitorId));
 
+        // TreeMap trava os produtos sempre na mesma ordem e evita deadlock entre pedidos simultaneos
         Map<Long, Integer> quantities = request.items().stream()
-                .collect(Collectors.toMap(OrderItemRequest::productId, OrderItemRequest::quantity, Integer::sum));
+                .collect(Collectors.toMap(
+                        OrderItemRequest::productId, OrderItemRequest::quantity, Integer::sum, TreeMap::new
+                ));
 
         Order order = new Order();
         order.setVisitor(visitor);
@@ -102,14 +118,13 @@ public class OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
-            Product product = productRepository.findById(entry.getKey())
+            Product product = productRepository.findByIdAndActiveTrue(entry.getKey())
                     .orElseThrow(() -> new ProductNotFoundException(entry.getKey()));
             int quantity = entry.getValue();
 
-            if (product.getQuantity() < quantity) {
+            if (productRepository.decreaseStock(product.getId(), quantity) == 0) {
                 throw new BusinessException("Estoque insuficiente para " + product.getName() + ".");
             }
-            product.setQuantity(product.getQuantity() - quantity);
 
             OrderItem item = new OrderItem();
             item.setOrder(order);
@@ -143,6 +158,32 @@ public class OrderService {
         Order order = findOrder(id, visitorId);
         changeStatus(order, OrderStatus.PAGO);
         return toResponse(order);
+    }
+
+    /**
+     * Pix e boleto nao pagos seguram estoque: passado o prazo, o pedido e cancelado
+     * e os itens voltam para a loja. Roda a cada 10 minutos.
+     */
+    @Scheduled(fixedDelay = 10, timeUnit = TimeUnit.MINUTES)
+    @Transactional
+    public void cancelExpiredOrders() {
+        LocalDateTime now = LocalDateTime.now();
+        Duration shortest = pendingExpiration.compareTo(boletoExpiration) < 0 ? pendingExpiration : boletoExpiration;
+
+        List<Order> expired = repository.findByStatusAndCreatedAtBefore(OrderStatus.PENDENTE, now.minus(shortest))
+                .stream()
+                .filter((order) -> order.getCreatedAt().plus(expirationFor(order)).isBefore(now))
+                .toList();
+
+        expired.forEach((order) -> changeStatus(order, OrderStatus.CANCELADO));
+
+        if (!expired.isEmpty()) {
+            log.info("{} pedido(s) pendente(s) cancelado(s) por falta de pagamento", expired.size());
+        }
+    }
+
+    private Duration expirationFor(Order order) {
+        return order.getPaymentMethod() == PaymentMethod.BOLETO ? boletoExpiration : pendingExpiration;
     }
 
     private void changeStatus(Order order, OrderStatus newStatus) {
@@ -196,8 +237,7 @@ public class OrderService {
 
     private void restoreStock(Order order) {
         for (OrderItem item : order.getItems()) {
-            Product product = item.getProduct();
-            product.setQuantity(product.getQuantity() + item.getQuantity());
+            productRepository.increaseStock(item.getProduct().getId(), item.getQuantity());
         }
     }
 

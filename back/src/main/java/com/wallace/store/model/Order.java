@@ -2,6 +2,7 @@ package com.wallace.store.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -40,6 +41,12 @@ public class Order {
 
     // Parcelas so existem no cartao; Pix e boleto ficam com null
     private Integer installments;
+
+    // Trava otimista: duas mudancas de status ao mesmo tempo nao se sobrescrevem
+    @Version
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private Long version;
 
     private BigDecimal shipping;
     private BigDecimal total;

@@ -324,13 +324,15 @@ const CheckoutPage = () => {
 
               {method === 'PIX' && (
                 <p key="pix" className="animate-swap-in text-sm text-muted">
-                  O QR code e o codigo copia e cola aparecem depois de confirmar o pedido.
+                  O QR code e o codigo copia e cola aparecem depois de confirmar o pedido. O Pix vale por 24 horas;
+                  depois disso o pedido e cancelado.
                 </p>
               )}
 
               {method === 'BOLETO' && (
                 <p key="boleto" className="animate-swap-in text-sm text-muted">
-                  O boleto vence em 3 dias e o pedido fica pendente ate a compensacao.
+                  O boleto vence em 3 dias e o pedido fica pendente ate a compensacao. Sem pagamento, o pedido e
+                  cancelado.
                 </p>
               )}
 
