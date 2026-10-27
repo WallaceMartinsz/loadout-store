@@ -2,6 +2,7 @@ package com.wallace.store.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -38,6 +39,11 @@ public class Product {
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private Category category;
+
+    // Remocao logica: produto ja vendido continua no historico dos pedidos
+    @ColumnDefault("true")
+    @Column(nullable = false)
+    private boolean active = true;
 
     @Column(updatable = false)
     private LocalDateTime createdAt;
