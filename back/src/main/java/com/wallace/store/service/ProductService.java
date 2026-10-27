@@ -20,7 +20,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> findAll() {
-        return repository.findAll()
+        return repository.findByActiveTrue()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -28,9 +28,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductResponse findById(Long id) {
-        return repository.findById(id)
-                .map(this::toResponse)
-                .orElseThrow(() -> new ProductNotFoundException(id));
+        return toResponse(findActive(id));
     }
 
     @Transactional
@@ -43,8 +41,7 @@ public class ProductService {
 
     @Transactional
     public ProductResponse update(Long id, ProductRequest request) {
-        Product product = repository.findById(id)
-                .orElseThrow(() -> new ProductNotFoundException(id));
+        Product product = findActive(id);
 
         applyRequest(product, request);
         return toResponse(repository.save(product));
@@ -52,11 +49,13 @@ public class ProductService {
 
     @Transactional
     public void delete(Long id) {
-        if (!repository.existsById(id)) {
-            throw new ProductNotFoundException(id);
-        }
+        // Apagar de verdade quebraria os pedidos que ja tem o produto; ele so sai da loja
+        findActive(id).setActive(false);
+    }
 
-        repository.deleteById(id);
+    private Product findActive(Long id) {
+        return repository.findByIdAndActiveTrue(id)
+                .orElseThrow(() -> new ProductNotFoundException(id));
     }
 
     private void applyRequest(Product product, ProductRequest request) {

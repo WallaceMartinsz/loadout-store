@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.wallace</groupId>
-	<artifactId>back</artifactId>
+	<artifactId>loadout-store</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>store</name>
-	<description>A project with Spring + React</description>
+	<name>loadout-store</name>
+	<description>API da Loadout Store: produtos, pedidos, pagamento simulado e autenticacao JWT</description>
 	<properties>
 		<java.version>17</java.version>
 		<lombok.version>1.18.42</lombok.version>
