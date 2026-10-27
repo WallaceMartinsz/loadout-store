@@ -1,9 +1,9 @@
-# Store App
+# Loadout Store
 
-Aplicacao fullstack de loja virtual construida com **React**, **Spring Boot** e **MySQL**.
+Loja virtual fullstack de perifericos e acessorios (a **Loadout**), construida com **React**, **Spring Boot** e **MySQL**.
 O projeto tem duas experiencias principais: uma area publica para visitantes comprarem e uma area administrativa para gerenciar produtos e vendas.
 
-![Tela inicial da loja](.github/storefront.png)
+![Demonstracao da Loadout Store](.github/demo.gif)
 
 ## O Que O Projeto Faz
 
@@ -52,7 +52,7 @@ Backend e frontend ficam separados dentro do mesmo repositorio (monorepo).
 ## Estrutura
 
 ```text
-store-app/
+loadout-store/
   back/        API Spring Boot
   front/       Aplicacao React
   compose.yml  MySQL + backend + frontend
@@ -150,15 +150,20 @@ APP_ADMIN_USERNAME
 APP_ADMIN_PASSWORD
 APP_JWT_SECRET          # chave de assinatura, minimo de 32 caracteres
 APP_JWT_EXPIRATION      # validade do token, padrao 2h
-APP_ORDER_SHIPPING_FEE  # frete fixo dos pedidos, padrao 10.00
+APP_ORDER_SHIPPING_FEE        # frete fixo dos pedidos, padrao 10.00
+APP_ORDER_PENDING_EXPIRATION  # prazo para pagar Pix/cartao pendente, padrao 24h
+APP_ORDER_BOLETO_EXPIRATION   # prazo para pagar o boleto, padrao 3d
 ```
 
 O visitante se cadastra com nome, e-mail, senha (guardada com BCrypt) e telefone opcional.
 
 ## Pedidos E Pagamento
 
-- O backend busca os precos no banco, valida o estoque, soma o frete e da baixa no estoque ao criar o pedido.
+- O backend busca os precos no banco, soma o frete e da baixa no estoque ao criar o pedido. A baixa e um update condicional no banco, entao duas compras ao mesmo tempo nao vendem mais do que o estoque.
 - O status segue o fluxo `PENDENTE -> PAGO -> ENVIADO`, com cancelamento possivel antes do envio.
+- Pedidos pendentes vencem (24h para Pix, 3 dias para boleto): uma rotina a cada 10 minutos cancela os vencidos e devolve o estoque.
+- Mudancas de status simultaneas no mesmo pedido sao barradas por trava otimista (`@Version`) e respondem 409.
+- Excluir um produto apenas o tira da loja (remocao logica), para nao quebrar os pedidos que ja o contem.
 - O pagamento e **simulado**: nenhuma cobranca real e feita e os dados do cartao nao saem do navegador.
   - **Cartao:** valida numero, validade e CVV no front, aceita de 1 a 10 parcelas e aprova na hora.
   - **Pix:** gera um QR code e um codigo copia e cola ilustrativos; o pagamento e confirmado por um botao de simulacao.
